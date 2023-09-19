@@ -6,6 +6,7 @@
 
 #include <folly/json.h>
 
+#include "common/graph/Response.h"
 #include "common/time/TimeConversion.h"
 #include "nebula/client/ConnectionPool.h"
 
@@ -39,23 +40,8 @@ bool SessionPool::init() {
 }
 
 ExecutionResponse SessionPool::execute(const std::string &stmt) {
-  auto result = getIdleSession();
-  if (result.second) {
-    auto resp = result.first.execute(stmt);
-    if (resp.spaceName != nullptr && *resp.spaceName != config_.spaceName_) {
-      // switch to origin space
-      result.first.execute("USE " + config_.spaceName_);
+  return executeWithParameter(stmt, {});
     }
-    giveBack(std::move(result.first));
-    return resp;
-  } else {
-    return ExecutionResponse{ErrorCode::E_DISCONNECTED,
-                             0,
-                             nullptr,
-                             nullptr,
-                             std::make_unique<std::string>("No idle session.")};
-  }
-}
 
 ExecutionResponse SessionPool::executeWithParameter(
     const std::string &stmt, const std::unordered_map<std::string, Value> &parameters) {
@@ -63,8 +49,14 @@ ExecutionResponse SessionPool::executeWithParameter(
   if (result.second) {
     auto resp = result.first.executeWithParameter(stmt, parameters);
     if (resp.spaceName != nullptr && *resp.spaceName != config_.spaceName_) {
-      // switch to origin space
+      if (*resp.spaceName == "") {
+        // This can be caused by reconnect, switch to origin space and try to query again
+        resp =
+            result.first.executeWithParameter("USE " + config_.spaceName_ + ";" + stmt, parameters);
+      } else {
+        // switch to origin space only
       result.first.execute("USE " + config_.spaceName_);
+    }
     }
     giveBack(std::move(result.first));
     return resp;
@@ -78,21 +70,8 @@ ExecutionResponse SessionPool::executeWithParameter(
 }
 
 std::string SessionPool::executeJson(const std::string &stmt) {
-  auto result = getIdleSession();
-  if (result.second) {
-    auto resp = result.first.executeJson(stmt);
-    auto obj = folly::parseJson(resp);
-    if (obj["results"][0]["spaceName"].asString() != config_.spaceName_) {
-      // switch to origin space
-      result.first.execute("USE " + config_.spaceName_);
+  return executeJsonWithParameter(stmt, {});
     }
-    giveBack(std::move(result.first));
-    return resp;
-  } else {
-    // TODO handle error
-    return "";
-  }
-}
 
 std::string SessionPool::executeJsonWithParameter(
     const std::string &stmt, const std::unordered_map<std::string, Value> &parameters) {
@@ -100,9 +79,16 @@ std::string SessionPool::executeJsonWithParameter(
   if (result.second) {
     auto resp = result.first.executeJsonWithParameter(stmt, parameters);
     auto obj = folly::parseJson(resp);
-    if (obj["results"][0]["spaceName"].asString() != config_.spaceName_) {
-      // switch to origin space
+    auto respSpaceName = obj["results"][0]["spaceName"].asString();
+    if (respSpaceName != config_.spaceName_) {
+      if (respSpaceName == "") {
+        // This can be caused by reconnect, switch to origin space and try to query again
+        resp = result.first.executeJsonWithParameter("USE " + config_.spaceName_ + ";" + stmt,
+                                                     parameters);
+      } else {
+        // switch to origin space only
       result.first.execute("USE " + config_.spaceName_);
+    }
     }
     giveBack(std::move(result.first));
     return resp;
