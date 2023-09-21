@@ -26,22 +26,27 @@ bool SessionPool::init() {
     return false;
   }
   std::string useSpace = "USE " + config_.spaceName_;
-  for (std::size_t i = 0; i < config_.maxSize_; ++i) {
+  for (std::size_t i = 0; i < config_.maxSize_ * 3; ++i) {
+    // 利用重试而不是有一个请求出错就初始化失败，因为有时候客户端一下子初始化300个线程，很常见
+    if (idleSessions_.size() >= config_.maxSize_) {
+      break;
+    }
     // use space
     auto session = pool_->getSession(config_.username_, config_.password_);
     auto resp = session.execute(useSpace);
     if (resp.errorCode == ErrorCode::SUCCEEDED) {
       idleSessions_.emplace_back(std::move(session));
-    } else {
-      return false;
     }
+  }
+  if (idleSessions_.size() < config_.maxSize_) {
+    return false;
   }
   return true;
 }
 
 ExecutionResponse SessionPool::execute(const std::string &stmt) {
   return executeWithParameter(stmt, {});
-    }
+}
 
 ExecutionResponse SessionPool::executeWithParameter(
     const std::string &stmt, const std::unordered_map<std::string, Value> &parameters) {

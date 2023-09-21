@@ -58,7 +58,6 @@ class SessionPool {
   std::string executeJsonWithParameter(const std::string &stmt,
                                        const std::unordered_map<std::string, Value> &parameters);
 
- private:
   std::pair<Session, bool> getIdleSession() {
     std::lock_guard<std::mutex> l(m_);
     if (idleSessions_.empty()) {
@@ -74,6 +73,7 @@ class SessionPool {
     idleSessions_.emplace_back(std::move(session));
   }
 
+private:
   SessionPoolConfig config_;
   std::unique_ptr<ConnectionPool> pool_;
   // destruct session before pool

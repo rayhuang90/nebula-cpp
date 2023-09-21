@@ -155,8 +155,16 @@ void Connection::asyncExecute(int64_t sessionId, const std::string &stmt, Execut
                          std::make_unique<std::string>("Not open connection.")});
     return;
   }
-  client_->future_execute(sessionId, stmt).thenValue([cb = std::move(cb)](auto &&resp) {
-    cb(std::move(resp));
+  client_->future_execute(sessionId, stmt).thenTry(
+    [cb = std::move(cb)](folly::Try<ExecutionResponse>&& respTry) {
+      if (respTry.hasException()) {
+        std::string errMsg = respTry.exception().class_name().toStdString() + ": " +
+          respTry.exception().what().toStdString();
+        cb(ExecutionResponse{ErrorCode::E_RPC_FAILURE, 0, nullptr, nullptr,
+          std::make_unique<std::string>(errMsg)});
+      } else {
+        cb(std::move(respTry.value()));
+      }
   });
 }
 

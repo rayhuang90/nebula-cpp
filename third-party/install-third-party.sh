@@ -83,7 +83,8 @@ function select_by_version {
 }
 
 selected_libc_version=$(select_by_version $this_libc_version "${libc_preset_versions[@]}")
-selected_gcc_version=$(select_by_version $this_gcc_version "${gcc_preset_versions[@]}")
+# selected_gcc_version=$(select_by_version $this_gcc_version "${gcc_preset_versions[@]}")
+selected_gcc_version="7.5.0"
 
 [[ -z $selected_libc_version ]] && {
     echo "No prebuilt third-party found for your environment: libc-$this_libc_version, GCC-$this_gcc_version, ABI $this_abi_version" 1>&2
