@@ -3,7 +3,7 @@
  *
  * This source code is licensed under Apache 2.0 License.
  */
- 
+
 {
 global:
     extern "C++" {
@@ -12,6 +12,8 @@ global:
         "nebula::init(int*, char***)";
         nebula::Session::*;
         nebula::SessionPool::*;
+        nebula::AsyncClient::*;
+        nebula::AsyncClientFactory::*;
         nebula::Value::*;
         nebula::DataSet::*;
         nebula::Date::*;
