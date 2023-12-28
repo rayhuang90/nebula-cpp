@@ -60,15 +60,6 @@ Session ConnectionPool::getSession(const std::string &username,
 
 Connection ConnectionPool::getConnection() {
   std::lock_guard<std::mutex> l(lock_);
-  // check connection
-  for (auto c = conns_.begin(); c != conns_.end();) {
-    if (!c->isOpen()) {
-      c = conns_.erase(c);
-      newConnection(nextCursor(), 1);
-    } else {
-      c++;
-    }
-  }
   if (conns_.empty()) {
     return Connection();
   }
@@ -97,7 +88,8 @@ void ConnectionPool::newConnection(std::size_t cursor, std::size_t count) {
                   address_[addrCursor].second,
                   config_.timeout_,
                   config_.enableSSL_,
-                  config_.CAPath_)) {
+                  config_.CAPath_) &&
+        conn.isOpen()) {
       ++connectionCount;
       conns_.emplace_back(std::move(conn));
     }

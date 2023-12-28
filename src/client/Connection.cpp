@@ -142,6 +142,45 @@ AuthResponse Connection::authenticate(const std::string &user, const std::string
   return resp;
 }
 
+
+void Connection::asyncAuthenticate(const std::string &user, const std::string &password, AuthCallback cb) {
+  if (client_ == nullptr) {
+    cb(AuthResponse{ErrorCode::E_DISCONNECTED,
+                    0,
+                    std::make_unique<std::string>("Not open connection.")});
+    return;
+  }
+  client_->future_authenticate(user, password).thenTry([cb = std::move(cb)](folly::Try<AuthResponse>&& respTry) {
+    using TTransportException = apache::thrift::transport::TTransportException;
+    if (respTry.hasException()) {
+      auto& tryException = respTry.exception();
+      if (auto ex = tryException.get_exception<TTransportException>(); ex != nullptr) {
+        auto errType = ex->getType();
+        std::string errMsg = ex->what();
+        if (errType == TTransportException::END_OF_FILE ||
+            (errType == TTransportException::INTERNAL_ERROR &&
+            errMsg.find("Connection reset by peer") != std::string::npos) ||
+            (errType == TTransportException::UNKNOWN &&
+            errMsg.find("Channel is !good()") != std::string::npos)) {
+          cb(AuthResponse{
+              ErrorCode::E_FAIL_TO_CONNECT, nullptr, std::make_unique<std::string>(errMsg)});
+        } else if (errType == TTransportException::TIMED_OUT) {
+          cb(AuthResponse{
+              ErrorCode::E_SESSION_TIMEOUT, nullptr, std::make_unique<std::string>(errMsg)});
+        } else {
+          cb(AuthResponse{
+              ErrorCode::E_RPC_FAILURE, nullptr, std::make_unique<std::string>(errMsg)});
+        }
+      } else {
+        std::string errMsg = tryException.class_name().toStdString() + " : " +  tryException.what().toStdString();
+        cb(AuthResponse{ErrorCode::E_RPC_FAILURE, nullptr, std::make_unique<std::string>(errMsg)});
+      }
+    } else {
+      cb(std::move(respTry.value()));
+    }
+  });
+}
+
 ExecutionResponse Connection::execute(int64_t sessionId, const std::string &stmt) {
   return executeWithParameter(sessionId, stmt, {});
 }
@@ -155,8 +194,34 @@ void Connection::asyncExecute(int64_t sessionId, const std::string &stmt, Execut
                          std::make_unique<std::string>("Not open connection.")});
     return;
   }
-  client_->future_execute(sessionId, stmt).thenValue([cb = std::move(cb)](auto &&resp) {
-    cb(std::move(resp));
+  client_->future_execute(sessionId, stmt).thenTry([cb = std::move(cb)](folly::Try<ExecutionResponse>&& respTry) {
+    using TTransportException = apache::thrift::transport::TTransportException;
+    if (respTry.hasException()) {
+      auto& tryException = respTry.exception();
+      if (auto ex = tryException.get_exception<TTransportException>(); ex != nullptr) {
+        auto errType = ex->getType();
+        std::string errMsg = ex->what();
+        if (errType == TTransportException::END_OF_FILE ||
+            (errType == TTransportException::INTERNAL_ERROR &&
+            errMsg.find("Connection reset by peer") != std::string::npos) ||
+            (errType == TTransportException::UNKNOWN &&
+            errMsg.find("Channel is !good()") != std::string::npos)) {
+          cb(ExecutionResponse{
+              ErrorCode::E_FAIL_TO_CONNECT, 0, nullptr, nullptr, std::make_unique<std::string>(errMsg)});
+        } else if (errType == TTransportException::TIMED_OUT) {
+          cb(ExecutionResponse{
+              ErrorCode::E_SESSION_TIMEOUT, 0, nullptr, nullptr, std::make_unique<std::string>(errMsg)});
+        } else {
+          cb(ExecutionResponse{
+              ErrorCode::E_RPC_FAILURE, 0, nullptr, nullptr, std::make_unique<std::string>(errMsg)});
+        }
+      } else {
+        std::string errMsg = tryException.class_name().toStdString() + " : " +  tryException.what().toStdString();
+        cb(ExecutionResponse{ErrorCode::E_RPC_FAILURE, 0, nullptr, nullptr, std::make_unique<std::string>(errMsg)});
+      }
+    } else {
+      cb(std::move(respTry.value()));
+    }
   });
 }
 

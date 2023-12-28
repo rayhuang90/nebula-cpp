@@ -27,6 +27,7 @@ class GraphServiceAsyncClient;
 
 class Connection {
  public:
+  using AuthCallback = std::function<void(AuthResponse &&)>;
   using ExecuteCallback = std::function<void(ExecutionResponse &&)>;
   using ExecuteJsonCallback = std::function<void(std::string &&)>;
 
@@ -54,6 +55,8 @@ class Connection {
             const std::string &CAPath);
 
   AuthResponse authenticate(const std::string &user, const std::string &password);
+
+  void asyncAuthenticate(const std::string &user, const std::string &password, AuthCallback cb);
 
   ExecutionResponse execute(int64_t sessionId, const std::string &stmt);
 

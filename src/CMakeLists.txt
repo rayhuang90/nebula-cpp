@@ -39,6 +39,7 @@ set(NEBULA_COMMON_SOURCES
 )
 
 set(NEBULA_CLIENT_SOURCES
+    client/AsyncClient.cpp
     client/Connection.cpp
     client/ConnectionPool.cpp
     client/Session.cpp
